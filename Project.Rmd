@@ -45,11 +45,22 @@ diab$hypertension <- as.factor(diab$hypertension)
 diab$heart_disease <- as.factor(diab$heart_disease)
 diab$smoking_history <- as.factor(diab$smoking_history)
 diab$blood_glucose_level <- as.numeric(diab$blood_glucose_level)
+diab$diabetes <- as.factor(diab$diabetes)
 summary(diab)
 
 # Remove gender == "Other" because they account for ~0.02% of the data
 diab <- diab[-which(diab$gender == "Other"),]
 diab$gender <- droplevels(diab$gender)
+
+## 20/80 test/train split; sampled from each diabetes category because data is unbalanced
+diab <- diab[order(diab$diabetes, decreasing=TRUE),]
+diabetes_count <- length(which(diab$diabetes == 1))
+no_diabetes_count <- length(which(diab$diabetes == 0))
+diabetes_test <- sample(1:diabetes_count, ceiling(diabetes_count*0.2))
+no_diabetes_test <- sample((diabetes_count+1):nrow(diab), ceiling(no_diabetes_count*0.2))
+diab_test <- diab[c(diabetes_test, no_diabetes_test),]
+diab_train <- diab[-c(diabetes_test, no_diabetes_test),]
+summary(diab_train)
 
 ## Try PCA on numerical covariates
 diab_train_num <- diab_train[,c(2,6,7,8)]
@@ -65,17 +76,6 @@ critical # No concerningly large critical values
 
 
 ```{r, echo=TRUE}
-
-## 20/80 test/train split; sampled from each diabetes category because data is unbalanced
-diab <- diab[order(diab$diabetes, decreasing=TRUE),]
-diabetes_count <- length(which(diab$diabetes == 1))
-no_diabetes_count <- length(which(diab$diabetes == 0))
-diabetes_test <- sample(1:diabetes_count, ceiling(diabetes_count*0.2))
-no_diabetes_test <- sample((diabetes_count+1):nrow(diab), ceiling(no_diabetes_count*0.2))
-diab_test <- diab[c(diabetes_test, no_diabetes_test),]
-diab_train <- diab[-c(diabetes_test, no_diabetes_test),]
-summary(diab_train)
-
 ## Try initial logistic model
 M0 <- glm(diabetes~., data=diab_train, family=binomial(link="logit"))
 summary(M0)
