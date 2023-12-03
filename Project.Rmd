@@ -41,8 +41,20 @@ summary(diab)
 diab <- diab[-which(diab$gender == "Other"),]
 diab$gender <- droplevels(diab$gender)
 
-# Combine not current and former
-diab$smoking_history <- fct_collapse(diab$smoking_history, cur_not = c("not current", "former"))
+## Try PCA on numerical covariates
+diab_train_num <- diab_train[,c(2,6,7,8)]
+diab_train_num <- as.matrix(diab_train_num)
+for (i in 1:4) {
+  diab_train_num[,i] <- scale(diab_train_num[,i])
+}
+pca <- eigen(t(diab_train_num)%*%diab_train_num)
+pca$values
+critical <- pca$values[1]/pca$values
+critical # No concerningly large critical values
+```
+
+
+```{r, echo=TRUE}
 
 ## 20/80 test/train split; sampled from each diabetes category because data is unbalanced
 diab <- diab[order(diab$diabetes, decreasing=TRUE),]
@@ -54,21 +66,10 @@ diab_test <- diab[c(diabetes_test, no_diabetes_test),]
 diab_train <- diab[-c(diabetes_test, no_diabetes_test),]
 summary(diab_train)
 
-## Try PCA on numerical covariates
-diab_train_num <- diab_train[,c(2,6,7,8)]
-diab_train_num <- as.matrix(diab_train_num)
-for (i in 1:4) {
-  diab_train_num[,i] <- scale(diab_train_num[,i])
-}
-pca <- eigen(t(diab_train_num)%*%diab_train_num)
-pca$values
-critical <- pca$values[1]/pca$values
-critical # No concerningly large critical values
-
 ## Try initial logistic model
-#M0 <- glm(diabetes~., data=diab_train, family=binomial(link="logit"))
-#summary(M0)
-#confusion_matrix(M0)
+M0 <- glm(diabetes~., data=diab_train, family=binomial(link="logit"))
+summary(M0)
+# confusion_matrix(M0)
 
 ## Use Tukey's test on smoking_history to see factor level relationships; try merging level pairs with highest p-value, one at a time
 #Tukey0 <- HSD.test(M0, "smoking_history", group=FALSE)
@@ -95,26 +96,32 @@ critical # No concerningly large critical values
 #diab_test$smoking_history <- fct_collapse(diab_test$smoking_history, cur_not_ever = c("cur_not", "ever"))
 #confusion_matrix(M, DATA=diab_test)
 
+```
+
+
+```{r, echo=TRUE}
+
+# Combine not current and former
+diab_train$smoking_history <- fct_collapse(diab_train$smoking_history, cur_not = c("not current", "former"))
 
 # Factorize categorical covariates
-diab$gender <- as.factor(diab$gender)
-diab$hypertension <- as.factor(diab$hypertension)
-diab$heart_disease <- as.factor(diab$heart_disease)
-diab$smoking_history <- as.factor(diab$smoking_history)
+#diab$gender <- as.factor(diab$gender)
+#diab$hypertension <- as.factor(diab$hypertension)
+#diab$heart_disease <- as.factor(diab$heart_disease)
+#diab$smoking_history <- as.factor(diab$smoking_history)
+#diab$blood_glucose_level <- as.numeric(diab$blood_glucose_level)
+#summary(diab)
 
-
-diab$blood_glucose_level <- as.numeric(diab$blood_glucose_level)
-summary(diab)
-
-model_1 = glm(diabetes~., data = diab, family=binomial(link="logit"))
-summary(model_1)
-
-
-
-model_2 = glm(diabetes~., data = diab, family=binomial(link="logit"))
+model_2 = glm(diabetes~., data = diab_train, family=binomial(link="logit"))
 summary(model_2)
 ```
 
+```{r, echo=TRUE}
+# smoking_history is not significant, drop this variable
+diab_train_new <- subset(diab_train, select = -smoking_history)
+model_3 = glm(diabetes~., data = diab_train_new, family=binomial(link="logit"))
+summary(model_3)
+```
 
 ```{r}
 install.packages("ROCR")
