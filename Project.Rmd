@@ -127,10 +127,12 @@ summary(model_2)
 ```
 
 ```{r, echo=TRUE}
-# smoking_history is not significant, drop this variable
-diab_train_new <- subset(diab_train, select = -smoking_history)
-model_3 = glm(diabetes~., data = diab_train_new, family=binomial(link="logit"))
+# Try dropping smoking_history
+diab_train_new <- diab_train[,-5]
+model_3 <- glm(diabetes~., data=diab_train_new, family=binomial(link="logit"))
 summary(model_3)
+anova(model_3, model_2, test="Chisq")
+# Reject model_2 and drop smoking_history
 ```
 
 ```{r}
