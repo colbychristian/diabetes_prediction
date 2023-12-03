@@ -8,15 +8,7 @@ This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute
 Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
 
 ```{r}
----
-title: "R Notebook"
-output: html_notebook
----
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
-
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
-```{r}
 install.packages("fastmap")
 packageVersion("fastmap")
 install.packages("agricolae")
@@ -136,38 +128,166 @@ summary(model_3)
 ```{r}
 install.packages("ROCR")
 ```
-
-```{r}
-library(ROCR)
-
-# Predict probabilities on the test data
-probabilities <- predict(model_3, newdata = diab_test, type = "response")
-
-# Define thresholds
-thresholds <- c(0.05, 0.1, 0.2, 0.3, 0.4, 0.5)
-
-# Calculate and print confusion matrices for each threshold
-for (threshold in thresholds) {
-  predictions <- ifelse(probabilities > threshold, 1, 0)
-  confusion_matrix <- table(diab_test$diabetes, predictions)
-  cat("Confusion Matrix at threshold", threshold, ":\n")
-  print(confusion_matrix)
-  cat("\n")
-}
-```
 ```{r}
 install.packages("ggplot2")
 ```
 
+```{r}
+# Predict probabilities on the test data for model_3
+probabilities <- predict(model_3, newdata = diab_train, type = "response")
+
+# Initialize vectors to store metrics
+accuracy <- c()
+precision <- c()
+recall <- c()
+thresholds <- seq(0, 1, by = 0.05)
+
+for (threshold in thresholds) {
+  # Make predictions based on the threshold
+  predicted_outcomes <- ifelse(probabilities > threshold, 1, 0)
+
+  # Calculate TP, FP, FN, TN
+  TP <- sum(predicted_outcomes == 1 & diab_train$diabetes == 1)
+  FP <- sum(predicted_outcomes == 1 & diab_train$diabetes == 0)
+  FN <- sum(predicted_outcomes == 0 & diab_train$diabetes == 1)
+  TN <- sum(predicted_outcomes == 0 & diab_train$diabetes == 0)
+
+  # Calculate metrics
+  acc <- (TP + TN) / (TP + FP + FN + TN)
+  prec <- ifelse(TP + FP == 0, 0, TP / (TP + FP))
+  rec <- ifelse(TP + FN == 0, 0, TP / (TP + FN))
+
+  # Store the metrics
+  accuracy <- c(accuracy, acc)
+  precision <- c(precision, prec)
+  recall <- c(recall, rec)
+}
+
+# Create a data frame for the results
+results_df <- data.frame(Threshold = thresholds, Accuracy = accuracy, Precision = precision, Recall = recall)
+
+# Print the data frame
+print(results_df)
+
+# Generate a line graph
+plot(results_df$Threshold, results_df$Accuracy, type = "l", col = "green", ylim = range(0, 1),
+     xlab = "Threshold", ylab = "Metric Value", main = "Model Metrics by Threshold on Training Data")
+lines(results_df$Threshold, results_df$Precision, col = "blue")
+lines(results_df$Threshold, results_df$Recall, col = "red")
+legend("bottomright", legend = c("Accuracy", "Precision", "Recall"), col = c("green", "blue", "red"), lty = 1)
+
+
+
+```
+
+
+
+
+
+
+
+
+```{r}
+# Predict probabilities on the test data for model_3
+probabilities <- predict(model_3, newdata = diab_train, type = "response")
+
+# Initialize vectors to store FP and FN rates
+fp_rates <- c()
+fn_rates <- c()
+thresholds <- seq(0, 1, by = 0.05)  # Adjust the step size as needed
+
+# Total actual positives and negatives
+total_positives <- sum(diab_train$diabetes == 1)
+total_negatives <- sum(diab_train$diabetes == 0)
+
+for (threshold in thresholds) {
+  # Make predictions based on the threshold
+  predicted_outcomes <- ifelse(probabilities > threshold, 1, 0)
+  
+  # Calculate FP and FN
+  fp <- sum(predicted_outcomes == 1 & diab_train$diabetes == 0)
+  fn <- sum(predicted_outcomes == 0 & diab_train$diabetes == 1)
+
+  # Calculate and store the rates
+  fp_rate <- fp / total_negatives
+  fn_rate <- fn / total_positives
+  fp_rates <- c(fp_rates, fp_rate)
+  fn_rates <- c(fn_rates, fn_rate)
+}
+
+# Plotting
+plot(thresholds, fp_rates, type = "l", col = "blue", ylim = c(0, max(c(fp_rates, fn_rates))),
+     xlab = "Threshold", ylab = "Rate", main = "False Negative and False Positive Trade-off by Threshold on Train Data", 
+     xaxt = 'n', yaxt = 'n')
+axis(1, at = seq(0, 1, by = 0.05))
+axis(2, at = seq(0, max(c(fp_rates, fn_rates)), by = 0.1))
+lines(thresholds, fn_rates, type = "l", col = "red")
+legend("topright", legend = c("False Positive Rate", "False Negative Rate"), col = c("blue", "red"), lty = 1)
+
+
+```
+
+
+```{r}
+
+# Predict probabilities on the test data for model_3
+probabilities <- predict(model_3, newdata = diab_test, type = "response")
+
+# Initialize vectors to store metrics
+accuracy <- c()
+precision <- c()
+recall <- c()
+thresholds <- seq(0, 1, by = 0.05)
+
+for (threshold in thresholds) {
+  # Make predictions based on the threshold
+  predicted_outcomes <- ifelse(probabilities > threshold, 1, 0)
+
+  # Calculate TP, FP, FN, TN
+  TP <- sum(predicted_outcomes == 1 & diab_test$diabetes == 1)
+  FP <- sum(predicted_outcomes == 1 & diab_test$diabetes == 0)
+  FN <- sum(predicted_outcomes == 0 & diab_test$diabetes == 1)
+  TN <- sum(predicted_outcomes == 0 & diab_test$diabetes == 0)
+
+  # Calculate metrics
+  acc <- (TP + TN) / (TP + FP + FN + TN)
+  prec <- ifelse(TP + FP == 0, 0, TP / (TP + FP))
+  rec <- ifelse(TP + FN == 0, 0, TP / (TP + FN))
+
+  # Store the metrics
+  accuracy <- c(accuracy, acc)
+  precision <- c(precision, prec)
+  recall <- c(recall, rec)
+}
+
+# Create a data frame for the results
+results_df <- data.frame(Threshold = thresholds, Accuracy = accuracy, Precision = precision, Recall = recall)
+
+# Print the data frame
+print(results_df)
+
+# Generate a line graph
+plot(results_df$Threshold, results_df$Accuracy, type = "l", col = "green", ylim = range(0, 1),
+     xlab = "Threshold", ylab = "Metric Value", main = "Model Metrics by Threshold on Test Data")
+lines(results_df$Threshold, results_df$Precision, col = "blue")
+lines(results_df$Threshold, results_df$Recall, col = "red")
+legend("bottomright", legend = c("Accuracy", "Precision", "Recall"), col = c("green", "blue", "red"), lty = 1)
+
+
+```
 
 ```{r}
 # Predict probabilities on the test data for model_3
 probabilities <- predict(model_3, newdata = diab_test, type = "response")
 
-# Initialize vectors to store FP and FN counts
-fp_counts <- c()
-fn_counts <- c()
-thresholds <- seq(0.05, 1, by = 0.05)  # Adjust the step size as needed
+# Initialize vectors to store FP and FN rates
+fp_rates <- c()
+fn_rates <- c()
+thresholds <- seq(0, 1, by = 0.05)  # Adjust the step size as needed
+
+# Total actual positives and negatives
+total_positives <- sum(diab_test$diabetes == 1)
+total_negatives <- sum(diab_test$diabetes == 0)
 
 for (threshold in thresholds) {
   # Make predictions based on the threshold
@@ -176,19 +296,25 @@ for (threshold in thresholds) {
   # Calculate FP and FN
   fp <- sum(predicted_outcomes == 1 & diab_test$diabetes == 0)
   fn <- sum(predicted_outcomes == 0 & diab_test$diabetes == 1)
-  
-  # Store the counts
-  fp_counts <- c(fp_counts, fp)
-  fn_counts <- c(fn_counts, fn)
+
+  # Calculate and store the rates
+  fp_rate <- fp / total_negatives
+  fn_rate <- fn / total_positives
+  fp_rates <- c(fp_rates, fp_rate)
+  fn_rates <- c(fn_rates, fn_rate)
 }
 
 # Plotting
-plot(thresholds, fp_counts, type = "l", col = "blue", ylim = range(c(fp_counts, fn_counts)),
-     xlab = "Threshold", ylab = "Count", main = "False Positives and False Negatives by Threshold")
-lines(thresholds, fn_counts, type = "l", col = "red")
-legend("topright", legend = c("False Positives", "False Negatives"), col = c("blue", "red"), lty = 1)
-```
+plot(thresholds, fp_rates, type = "l", col = "blue", ylim = c(0, max(c(fp_rates, fn_rates))),
+     xlab = "Threshold", ylab = "Rate", main = "False Negative and False Positive Trade-off by Threshold on Test Data", 
+     xaxt = 'n', yaxt = 'n')
+axis(1, at = seq(0, 1, by = 0.05))
+axis(2, at = seq(0, max(c(fp_rates, fn_rates)), by = 0.1))
+lines(thresholds, fn_rates, type = "l", col = "red")
+legend("topright", legend = c("False Positive Rate", "False Negative Rate"), col = c("blue", "red"), lty = 1)
 
+
+```
 Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
 
 When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
