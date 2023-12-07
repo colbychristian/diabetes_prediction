@@ -1,35 +1,27 @@
 ---
-title: "R Notebook"
-output: html_notebook
+title: "STAT 537 Project"
+output: pdf_document
 ---
 
-This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
-
-```{r}
-
-install.packages("fastmap")
-packageVersion("fastmap")
-install.packages("agricolae")
+```{r, message=FALSE}
+library(agricolae)
+library(car)
+library(factoextra)
+library(forcats)
+library(ggplot2)
+library(regclass)
+set.seed(537)
 ```
 
 ```{r}
-library(agricolae)
-library(forcats)
-library(leaps)
-library(bestglm)
-library(regclass)
-set.seed(537)
-
-
-
 ## Data cleanup
 diab <- read.csv("diabetes_prediction_dataset.csv")
 diab <- na.omit(diab)
 diab <- unique(diab)
-diab <- diab[diab$smoking_history != "No Info", ]
-diab <- diab[diab$smoking_history != "ever", ]
 
 # Factorize categorical covariates
 diab$gender <- as.factor(diab$gender)
@@ -38,12 +30,35 @@ diab$heart_disease <- as.factor(diab$heart_disease)
 diab$smoking_history <- as.factor(diab$smoking_history)
 diab$blood_glucose_level <- as.numeric(diab$blood_glucose_level)
 diab$diabetes <- as.factor(diab$diabetes)
-summary(diab)
 
-# Remove gender == "Other" because they account for ~0.02% of the data
+# Remove gender == "Other" and smoking_history == "No Info" 
 diab <- diab[-which(diab$gender == "Other"),]
 diab$gender <- droplevels(diab$gender)
+diab <- diab[-which(diab$smoking_history == "No Info"),]
+diab$smoking_history <- droplevels(diab$smoking_history)
 
+# Refactor smoking_history into just Yes/No
+diab$smoking_history <- fct_collapse(diab$smoking_history, "0" = c("never"),
+                                     "1" = c("current", "ever", "former", "not current"))
+
+summary(diab)
+```
+
+```{r}
+## PCA to test for possible dimension reduction
+
+diab.pca <- diab[,-9]
+for (i in 1:8) {
+  diab.pca[,i] <- as.numeric(diab.pca[,i])
+}
+diab.pca <- scale(diab.pca)
+pca <- prcomp(diab.pca)
+summary(pca)
+fviz_eig(pca, addlabels=TRUE)
+# Nah we good
+```
+
+```{r}
 ## 20/80 test/train split; sampled from each diabetes category because data is unbalanced
 diab <- diab[order(diab$diabetes, decreasing=TRUE),]
 diabetes_count <- length(which(diab$diabetes == 1))
@@ -52,91 +67,63 @@ diabetes_test <- sample(1:diabetes_count, ceiling(diabetes_count*0.2))
 no_diabetes_test <- sample((diabetes_count+1):nrow(diab), ceiling(no_diabetes_count*0.2))
 diab_test <- diab[c(diabetes_test, no_diabetes_test),]
 diab_train <- diab[-c(diabetes_test, no_diabetes_test),]
-summary(diab_train)
-
-## Try PCA on numerical covariates
-diab_train_num <- diab_train[,c(2,6,7,8)]
-diab_train_num <- as.matrix(diab_train_num)
-for (i in 1:4) {
-  diab_train_num[,i] <- scale(diab_train_num[,i])
-}
-pca <- eigen(t(diab_train_num)%*%diab_train_num)
-pca$values
-critical <- pca$values[1]/pca$values
-critical # No concerningly large critical values
 ```
 
-
-```{r, echo=TRUE}
+```{r}
 ## Try initial logistic model
 M0 <- glm(diabetes~., data=diab_train, family=binomial(link="logit"))
 summary(M0)
-# confusion_matrix(M0)
-
-## Use Tukey's test on smoking_history to see factor level relationships; try merging level pairs with highest p-value, one at a time
-#Tukey0 <- HSD.test(M0, "smoking_history", group=FALSE)
-#Tukey0
-
-#diab_train$smoking_history <- fct_collapse(diab_train$smoking_history, cur_not = c("current", "not current"))
-#M1 <- glm(diabetes~., data=diab_train, family=binomial(link="logit"))
-#Tukey1 <- HSD.test(M1, "smoking_history", group=FALSE)
-#Tukey1
-
-#diab_train$smoking_history <- fct_collapse(diab_train$smoking_history, cur_not_ever = c("cur_not", "ever"))
-#M2 <- glm(diabetes~., data=diab_train, family=binomial(link="logit"))
-#Tukey2 <- HSD.test(M2, "smoking_history", group=FALSE)
-#Tukey2
-
-# Looks better, although whether or not combining "current", "not current", and "ever" together makes sense is up for debate; if needed we can revert back to M0 or M1
-#M <- M2
-
-## Check for multicolinearity
-#VIF(M)
-
-## See how the model works on test data, just for fun
-#diab_test$smoking_history <- fct_collapse(diab_test$smoking_history, cur_not = c("current", "not current"))
-#diab_test$smoking_history <- fct_collapse(diab_test$smoking_history, cur_not_ever = c("cur_not", "ever"))
-#confusion_matrix(M, DATA=diab_test)
-
-```
-
-
-```{r, echo=TRUE}
-
-# Combine not current and former
-diab_train$smoking_history <- fct_collapse(diab_train$smoking_history, cur_not = c("not current", "former"))
-
-# Factorize categorical covariates
-#diab$gender <- as.factor(diab$gender)
-#diab$hypertension <- as.factor(diab$hypertension)
-#diab$heart_disease <- as.factor(diab$heart_disease)
-#diab$smoking_history <- as.factor(diab$smoking_history)
-#diab$blood_glucose_level <- as.numeric(diab$blood_glucose_level)
-#summary(diab)
-
-model_2 = glm(diabetes~., data = diab_train, family=binomial(link="logit"))
-summary(model_2)
-```
-
-```{r, echo=TRUE}
-# Try dropping smoking_history
-diab_train_new <- diab_train[,-5]
-model_3 <- glm(diabetes~., data=diab_train_new, family=binomial(link="logit"))
-summary(model_3)
-anova(model_3, model_2, test="Chisq")
-# Reject model_2 and drop smoking_history
 ```
 
 ```{r}
-install.packages("ROCR")
+## Smoking history is concerning; can we get rid of it?
+M1 <- glm(diabetes~.-smoking_history, data=diab_train, family=binomial(link="logit"))
+
+anova(M1, M0, test="Chisq")
+# Yes
+
+diab_train <- diab_train[,-5]
+diab_test <- diab_test[,-5]
 ```
 ```{r}
-install.packages("ggplot2")
+M1 <- glm(diabetes~., data=diab_train, family=binomial(link="logit"))
+summary(M1)
 ```
+
+```{r}
+prob <- predict(M1, type="response")
+for (i in c(2,5,6,7)) {
+  plot(x=diab_train[,i], y=log(prob/(1-prob)), xlab=names(diab_train[i]), ylab="Log OR")
+}
+# Take log(bmi)?
+```
+
+```{r}
+diab_train[,5] <- log(diab_train[,5])
+names(diab_train)[5] <- "log(bmi)"
+diab_test[,5] <- log(diab_test[,5])
+names(diab_test)[5] <- "log(bmi)"
+
+M2 <- glm(diabetes~., data=diab_train, family=binomial(link="logit"))
+summary(M2)
+plot(x=diab_train[,5], y=log(prob/(1-prob)), xlab=names(diab_train[5]), ylab="Log OR")
+
+# A little better
+```
+
+```{r}
+VIF(M2)
+# No multicolinearity
+```
+
+\begin{align*}
+\log(\frac{\pi_i}{1-\pi_i}) &= \beta_0+\beta_1I(male)+\beta_2x_{age}+\beta_3I(HT)+\beta_4I(HD)+\beta_5\log(x_{BMI})+\beta_6x_{HbA1c}+\beta_7x_{BGL} \\
+&= -34.16+0.21I(male)+0.05x_{age}+0.71I(HT)+0.71I(HD)+2.93\log(x_{BMI})+2.29x_{HbA1c}+0.03x_{BGL} \\
+\end{align*}
 
 ```{r}
 # Predict probabilities on the test data for model_3
-probabilities <- predict(model_3, newdata = diab_train, type = "response")
+probabilities <- predict(M2, newdata = diab_train, type = "response")
 
 # Initialize vectors to store metrics
 accuracy <- c()
@@ -178,20 +165,11 @@ lines(results_df$Threshold, results_df$Precision, col = "blue")
 lines(results_df$Threshold, results_df$Recall, col = "red")
 legend("bottomright", legend = c("Accuracy", "Precision", "Recall"), col = c("green", "blue", "red"), lty = 1)
 
-
-
 ```
-
-
-
-
-
-
-
 
 ```{r}
 # Predict probabilities on the test data for model_3
-probabilities <- predict(model_3, newdata = diab_train, type = "response")
+probabilities <- predict(M2, newdata = diab_train, type = "response")
 
 # Initialize vectors to store FP and FN rates
 fp_rates <- c()
@@ -226,14 +204,11 @@ axis(2, at = seq(0, max(c(fp_rates, fn_rates)), by = 0.1))
 lines(thresholds, fn_rates, type = "l", col = "red")
 legend("topright", legend = c("False Positive Rate", "False Negative Rate"), col = c("blue", "red"), lty = 1)
 
-
 ```
 
-
 ```{r}
-
 # Predict probabilities on the test data for model_3
-probabilities <- predict(model_3, newdata = diab_test, type = "response")
+probabilities <- predict(M2, newdata = diab_test, type = "response")
 
 # Initialize vectors to store metrics
 accuracy <- c()
@@ -275,12 +250,11 @@ lines(results_df$Threshold, results_df$Precision, col = "blue")
 lines(results_df$Threshold, results_df$Recall, col = "red")
 legend("bottomright", legend = c("Accuracy", "Precision", "Recall"), col = c("green", "blue", "red"), lty = 1)
 
-
 ```
 
 ```{r}
 # Predict probabilities on the test data for model_3
-probabilities <- predict(model_3, newdata = diab_test, type = "response")
+probabilities <- predict(M2, newdata = diab_test, type = "response")
 
 # Initialize vectors to store FP and FN rates
 fp_rates <- c()
@@ -315,18 +289,4 @@ axis(2, at = seq(0, max(c(fp_rates, fn_rates)), by = 0.1))
 lines(thresholds, fn_rates, type = "l", col = "red")
 legend("topright", legend = c("False Positive Rate", "False Negative Rate"), col = c("blue", "red"), lty = 1)
 
-
 ```
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
-
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
-
-```
-
-Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
-
-When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
-
-The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
